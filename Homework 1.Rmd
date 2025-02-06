@@ -1,0 +1,597 @@
+---
+title: "Homework1"
+author: "Gabriel Guerra, Jonàs Salat i Biel Manté"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+  html_document:
+    theme: flatly
+    highlight: tango    
+header-includes:
+  - \usepackage{afterpage}
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T,
+  warning = FALSE,
+  message = FALSE
+  )
+
+library(dplyr)
+library(tidyverse)
+library(tidyr)
+library(FactoMineR)
+library(corrplot)
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(ggplot2)
+library(gridExtra)
+```
+
+
+```{r,include=FALSE}
+path = "~/Dropbox/Mi Mac (MacBook Air de Biel)/Desktop/1. Master/1. Assignatures/MVA/A1. Assignment 1/"
+data = read.csv2(paste0(path,"euroleague_23_24.csv"))
+```
+
+\newpage
+
+# 1. First do the exploratory data analysis.
+
+
+
+## a) Discard the variable “No” from the data set. (1p)
+
+
+
+```{r}
+data = data %>% select(-No)
+```
+
+## b) Split variable “Min” using strsplit() function. Give the name “aux” to the output. The first element of each row will show the minutes that the player played in total. (1p)
+
+
+```{r}
+aux = strsplit(data$Min,split = ":")
+df = data.frame(aux = NA)
+
+
+b = lapply(1:length(aux),function(i){
+  aux[[i]][1] <<-  as.numeric(aux[[i]][1]) * as.numeric(data[i,"GP"])
+  aux[[i]][2] <<-  (as.numeric(aux[[i]][2]) * as.numeric(data[i,"GP"]))/60
+  df[i,1] <<- as.numeric(aux[[i]][1]) + as.numeric(aux[[i]][2])
+
+})
+
+aux = df
+```
+
+```{r,include=FALSE}
+rm("df","b")
+```
+
+
+## c) Add a numerical variable to the data set named “Min 2” which shows on average how many minutes each player played in the game. (2p)
+
+
+```{r}
+data = data %>% mutate("Min 2" = aux$aux/GP)
+data = data %>% relocate("Min 2" ,.after = "Min")
+data = data %>% select(-Min)
+```
+
+
+## d) Check the structure of the data and assign correct type to each variable considering whether it is a categorical or numerical variable. (2p)
+
+We shold change the variables team, player and position to factor
+
+```{r}
+str(data)
+data = data %>% mutate_if(is.character,factor)
+```
+
+
+# 2. Application of PCA
+
+## a) Apply PCA on all the scaled numerical variables in the data set by using PCA() function in FactoMineR package. Treat the categorical variables and the variable “PIR” as suplemantary variables using arguments quali.sup and quanti.sup correctly. (3p)
+
+
+
+```{r}
+pca = PCA(data, quanti.sup = which(colnames(data) == "PIR"),quali.sup = which(sapply(data, is.factor)))
+```
+
+
+## b) How many components should be extracted? Decide on the number of components considering eigenvalues. (3p)
+
+
+
+```{r}
+fviz_eig(pca, addlabels = TRUE, ylim = c(0, 100), 
+         barcolor = "#53868B", barfill = "#DCF0F8", 
+         ncp = 14, geom = c("bar", "line"))
+
+
+eig_vals = get_eig(pca)[,2]
+cumulative_var = cumsum(eig_vals)
+
+df = data.frame(Dimension = 1:length(cumulative_var),
+                 CumulativeVariance = cumulative_var)
+
+# Plot cumulative variance
+ggplot(df, aes(x = Dimension, y = CumulativeVariance)) +
+  geom_bar(stat = "identity", fill = "#DCF0F8", color = "#53868B") +
+  geom_text(aes(label = round(CumulativeVariance, 1)), vjust = -0.5) +
+  ylim(0, 120) +
+  labs(title = "Cumulative Variance Explained by Principal Components",
+       x = "Dimensions", y = "Cumulative Variance (%)") + theme_minimal()
+```
+
+```{r,include=FALSE}
+rm("df","cumulative_var")
+```
+
+## c) Interpret the loadings/correlations of variables at each dimension (3p).
+
+```{r}
+pca$var$coord[,1:5]
+```
+
+## d) Use plot.PCA() function to show correlations between variables and the extracted dimensions. (For the variables you should use the argument choix = “var”). Plot all the extracted dimensions changing argument “axes”.(3p)
+
+
+```{r}
+c  = 1:5
+c = t(combn(c, m =2))
+
+lapply(1:nrow(c),function(i){
+  plot.PCA(pca,choix = "var",axes = c[i,])
+})
+```
+
+## e) Interpret variable plots. How can each dimension be named? (5p)
+
+
+
+## f) Show individual pilots for the extracted dimensions changing argumennt choix=“ind” in plot.PCA() function. (2p)
+
+
+
+### By Position 
+
+
+```{r}
+lapply(1:nrow(c),function(i){
+  plot.PCA(pca,choix = "ind",axes = c[i,],habillage = 3,label = "ind", col.ind = "blue")
+})
+```
+
+### By Team
+
+
+```{r}
+lapply(1:nrow(c),function(i){
+  plot.PCA(pca,choix = "ind",axes = c[i,],habillage = 1,label = "ind", col.ind = "blue")
+})
+```
+
+## g) Interpret the individual plots. (3p)
+
+
+### Dimensions 1 and 2
+
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION) + 
+  theme_minimal()
+```
+
+### Dimensions 1 and 3
+
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(1,3)) + 
+  theme_minimal()
+```
+
+### Dimensions 1 and 4
+
+
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(1,4)) + 
+  theme_minimal()
+```
+
+### Dimensions 1 and 5
+
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(1,5)) + 
+  theme_minimal()
+```
+
+### Dimensions 2 and 3
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(2,3)) + 
+  theme_minimal()
+```
+### Dimensions 2 and 4
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(2,4)) + 
+  theme_minimal()
+```
+
+### Dimensions 2 and 5
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(2,5)) + 
+  theme_minimal()
+```
+
+
+### Dimensions 3 and 4
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(3,4)) + 
+  theme_minimal()
+```
+
+### Dimensions 3 and 5
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(3,5)) + 
+  theme_minimal()
+```
+
+
+### Dimensions 4 and 5
+
+```{r}
+fviz_pca_biplot(pca, repel = T,label = "var",habillage = data$POSITION,axes = c(4,5)) + 
+  theme_minimal()
+```
+
+
+
+# 3. Application of MDS.
+
+## a) Apply metric MDS using Euclidean distance on scaled numerical variables. (2p)
+
+```{r}
+numeric_data = data %>% select_if(is.numeric)
+scaled_data = scale(numeric_data)
+dist_matrix = dist(scaled_data, method = "euclidean")
+mds_result = cmdscale(dist_matrix,eig=TRUE) 
+```
+
+## b) Plot the data using the points on the first two coordinates using players names as label. (2p)
+
+
+```{r}
+x  =  mds_result$points[,1]
+y  =  mds_result$points[,2]
+
+plot(x, y, xlab="Length of the code", ylab="Number of lines",
+     main="Metric MDS", type="p",pch = 16)
+text(x, y, labels = data$PLAYER, cex = 0.5,pos = 2,col = "black")
+abline(v = 0, h = 0,lty = 3)
+```
+
+
+## c) Interpret the plot (3p).
+
+
+
+## d) Calculate gower distance including variable “POSITION” to the data matrix (3p).
+
+```{r}
+numeric_pos_data = numeric_data %>% 
+                   add_column(data$POSITION, .before = 1) %>% 
+                   rename("POSITION" = "data$POSITION")
+
+gower_dist = daisy(numeric_pos_data, metric = "gower")
+#print(as.matrix(gower_dist))
+```
+
+## e) Apply metric MDS on gower distance matrix (2p).
+
+```{r}
+mds_result = cmdscale(gower_dist, eig = T)
+```
+
+
+
+
+## f) Plot individual plots on the first two coordinates (2p).
+
+```{r}
+x  =  mds_result$points[,1]
+y  =  mds_result$points[,2]
+
+plot(x, y, xlab="Length of the code", ylab="Number of lines",
+     main="Metric MDS", type="p",pch = 16)
+text(x, y, labels = data$PLAYER, cex=0.5,pos = 2)
+abline(v = 0, h = 0,lty = 3)
+```
+
+## g)  Use different categorical and numerical variables as labels so as to explain clusters that are constructed.(5p)
+
+
+```{r,include=FALSE}
+numeric_data = data %>% select_if(is.numeric)
+scaled_data = scale(numeric_data)
+dist_matrix = dist(scaled_data, method = "euclidean")
+mds_result = cmdscale(dist_matrix,eig=TRUE) 
+
+data$x = mds_result$points[,1]
+data$y = mds_result$points[,2]
+```
+
+
+```{r,include=FALSE}
+p1_1 = ggplot(data, aes(x = x, y = y, color = PIR, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 1 - Only numerical variables", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p1_2 = ggplot(data, aes(x = x, y = y, color = PIR, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 1 - Only numerical variables", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p1_3 = ggplot(data, aes(x = x, y = y, color = PTS, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 1 - Only numerical variables", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+
+
+```{r,include=FALSE}
+p1_4 = ggplot(data, aes(x = x, y = y, color = PTS, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 1 - Only numerical variables", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+
+```{r,include=FALSE}
+numeric_pos_data = numeric_data %>% add_column(data$POSITION, .before = 1) %>% rename("POSITION" = "data$POSITION")
+
+dist_matrix = daisy(numeric_pos_data, metric = "gower")
+mds_result = cmdscale(dist_matrix,eig=TRUE) 
+
+data$x = mds_result$points[,1]
+data$y =  mds_result$points[,2]
+```
+
+
+
+```{r,include=FALSE}
+p2_1 = ggplot(data, aes(x = x, y = y, color = PIR, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 2 - Numerical variables and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p2_2 = ggplot(data, aes(x = x, y = y, color = PIR, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 2 - Numerical variables and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p2_3 = ggplot(data, aes(x = x, y = y, color = PTS, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 2 - Numerical variables and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+
+
+```{r,include=FALSE}
+p2_4 = ggplot(data, aes(x = x, y = y, color = PTS, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 2 - Numerical variables and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+
+
+
+```{r,include=FALSE}
+numeric_team_data = numeric_data %>% add_column(data$TEAM, .before = 1) %>% rename("TEAM" = "data$TEAM")
+
+dist_matrix = daisy(numeric_team_data, metric = "gower")
+mds_result = cmdscale(dist_matrix,eig=TRUE) 
+data$x = mds_result$points[,1]
+data$y =mds_result$points[,2]
+```
+
+
+
+```{r,include=FALSE}
+p3_1 = ggplot(data, aes(x = x, y = y, color = PIR, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 3 - Numerical variables and team", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p3_2 = ggplot(data, aes(x = x, y = y, color = PIR, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 3 - Numerical variables and team", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p3_3 = ggplot(data, aes(x = x, y = y, color = PTS, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 3 - Numerical variables and team", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+
+```{r,include=FALSE}
+p3_4 = ggplot(data, aes(x = x, y = y, color = PTS, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 3 - Numerical variables and team", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+
+```{r,include=FALSE}
+numeric_team_data = data %>% select(-PLAYER,x,y)
+
+dist_matrix = daisy(numeric_team_data, metric = "gower")
+mds_result = cmdscale(dist_matrix,eig=TRUE) 
+data$x = mds_result$points[,1]
+data$y =mds_result$points[,2]
+```
+
+
+
+```{r,include=FALSE}
+p4_1 = ggplot(data, aes(x = x, y = y, color = PIR, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 4 - Numerical variables, team and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p4_2 = ggplot(data, aes(x = x, y = y, color = PIR, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PIR") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 4 - Numerical variables, team and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+```{r,include=FALSE}
+p4_3 = ggplot(data, aes(x = x, y = y, color = PTS, shape = POSITION)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17), name = "Position") + 
+  labs(title = "MDS 4 - Numerical variables, team and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+
+
+```{r,include=FALSE}
+p4_4 = ggplot(data, aes(x = x, y = y, color = PTS, shape = TEAM)) + 
+  geom_point(size = 3) + 
+  scale_color_gradientn(colors = hcl.colors(100, "ag_Sunset"), name = "PTS") +  
+  scale_shape_manual(values = c(15,16 ,17,18), name = "TEAM") + 
+  labs(title = "MDS 4 - Numerical variables, team and position", x = "Dim 1", y = "Dim 2") +
+  theme_bw() + 
+  theme(legend.title = element_text(size = 10))
+```
+
+
+### By Performance Index Rating and position
+
+
+```{r,fig.height=8,fig.width=15}
+grid.arrange(p1_1, p2_1, p3_1 ,p4_1,ncol = 2, nrow = 2)
+```
+
+### By Performance Index Rating and team
+
+
+
+```{r,fig.height=8,fig.width=15}
+grid.arrange(p1_2, p2_2, p3_2 ,p4_2,ncol = 2, nrow = 2)
+```
+
+### By points scored and position
+
+
+```{r,fig.height=8,fig.width=15}
+grid.arrange(p1_3, p2_3, p3_3 ,p4_3,ncol = 2, nrow = 2)
+```
+
+
+### By points scored and team
+
+
+
+```{r,fig.height=8,fig.width=15}
+grid.arrange(p1_4, p2_4, p3_4 ,p4_4,ncol = 2, nrow = 2)
+```
+
+
+## h) Which MDS do you think better group the individuals? Why? (3p)
+
+
+
+
+
